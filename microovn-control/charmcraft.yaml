@@ -2,7 +2,7 @@
 # See https://juju.is/docs/sdk/charmcraft-config for guidance.
 
 # (Required)
-name: microovn-charm
+name: microovn-control
 
 
 # (Required)
@@ -43,5 +43,9 @@ config:
       type: string
 
 peers:
-  microovn-peers:
-    interface: microovn-charm
+  cluster:
+    interface: worker-cluster
+
+provides:
+  microovn-cluster:
+    interface: worker-cluster

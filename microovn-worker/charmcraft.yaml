@@ -1,0 +1,52 @@
+# This file configures Charmcraft.
+# See https://juju.is/docs/sdk/charmcraft-config for guidance.
+
+# (Required)
+name: microovn-worker
+
+
+# (Required)
+type: charm
+
+
+# (Recommended)
+title: MicroOVN Charm
+
+
+# (Required)
+summary: A thin layer around MicroOVN, to allow it to be used as a charm
+
+
+# (Required)
+description: |
+  A thin layer over the software defined networking project MicroOVN.
+  This is a machine charm that primarily allows MicroOVN to be used easily within
+  juju, allowing its many ease of use features to be used within the charm
+  ecosystem.
+
+  This is very much in development
+
+
+# (Required for 'charm' type)
+bases:
+  - build-on:
+    - name: ubuntu
+      channel: "22.04"
+    run-on:
+    - name: ubuntu
+      channel: "22.04"
+
+config:
+  options:
+    log-level:
+      default: "info"
+      type: string
+
+requires:
+  cluster:
+    # interface to connect with the k8s charm to provide
+    # authentication token via a secret in order to cluster
+    # this machine as a worker unit.
+    #   juju integrate k8s:k8s-cluster k8s-worker:cluster
+    interface: worker-cluster
+    limit: 1
