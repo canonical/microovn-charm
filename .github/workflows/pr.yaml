@@ -15,7 +15,7 @@ jobs:
       name: microovn
       path: microovn
   test:
-    runs-on: ubuntu-latest
+    runs-on: [ ubuntu-latest, large ]
     needs:
       - pack-microcluster-token-distributor
       - pack-microovn
@@ -27,22 +27,54 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: microovn
-      - run: |
-          # NOTE this here to demonstrate use of workflow,
-          #      replace with actual tests.
-          echo ${{ needs.pack-microcluster-token-distributor.outputs.charms }}
-          for charm in ${{ needs.pack-microcluster-token-distributor.outputs.charms }}; do
-            mkdir charm
-            pushd charm
-            unzip ../$charm
-            popd
-            rm -rf charm
-          done
-          echo ${{ needs.pack-microovn.outputs.charms }}
-          for charm in ${{ needs.pack-microovn.outputs.charms }}; do
-            mkdir charm
-            pushd charm
-            unzip ../$charm
-            popd
-            rm -rf charm
-          done
+
+      - name: Set charm paths
+        run: |
+          set -- ${{ needs.pack-microovn.outputs.charms }}
+          echo "MICROOVN_CHARM_PATH=$1" >> $GITHUB_ENV
+          set -- ${{ needs.pack-microcluster-token-distributor.outputs.charms }}
+          echo "TOKEN_DISTRIBUTOR_CHARM_PATH=$1" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: |
+          sudo apt -yqq install tox
+          sudo snap install concierge --classic
+          sudo apt install python3-pytest
+          # install jubilant in a nicer way when its in apt/snap
+          pip install jubilant --break-system-packages
+
+      - name: Prepare Environment for functional tests
+        run: |
+          # Use concierge to setup LXD, microk8s and bootstrap juju controller
+          cat <<EOF >>/tmp/concierge.yaml
+          juju:
+            channel: 3.5/stable
+
+          providers:
+            microk8s:
+              enable: true
+              bootstrap: false
+              addons:
+                - dns
+                - hostpath-storage
+                - metallb
+
+            lxd:
+              enable: true
+              bootstrap: true
+          EOF
+
+          sudo concierge prepare -c /tmp/concierge.yaml
+
+          # Create second bridged network needed by the functional tests
+          lxc network create second --type=bridge
+
+          # Add microk8s as a kubernetes substrate to the Juju controller
+          sudo microk8s status --wait
+          # The kubernetes API is not always immediately available to use, even if
+          # microk8s status reports ready state. These retries ensure that we don't
+          # fail the test unnecessarily
+          (r=30;while ! juju add-k8s mk8s --controller concierge-lxd ; do ((--r))||exit;sleep 2;done)
+
+      - name: Run test
+        run: pytest tests
